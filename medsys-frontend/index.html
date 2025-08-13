@@ -1,0 +1,286 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Medsys Technologies • Panel</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;600;700;800&family=Roboto:wght@400;500;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="styles.css"/>
+  <script defer src="app.js"></script>
+</head>
+<body>
+<div class="app-shell">
+  <aside class="sidebar" id="sidebar">
+    <div class="brand">
+      <img src="img/logo-sidebar.png" alt="Logo Medsys" />
+      <div>
+        <h1>Medsys<small>Technologies</small></h1>
+      </div>
+    </div>
+    <nav class="nav" id="nav">
+      <a href="#" data-section="dashboard" class="active">🏠 Inicio</a>
+      <a href="#" data-section="productos">📦 Productos</a>
+      <a href="#" data-section="materiales">🧰 Materiales</a>
+      <a href="#" data-section="proveedores">🤝 Proveedores</a>
+      <a href="#" data-section="ensambles">🧪 Ensambles</a>
+      <a href="#" data-section="scrap">🗑️ Scrap</a>
+      <a href="#" data-section="personal">👥 Personal</a>
+      <a href="#" data-section="ventas">🧾 Ventas</a> <!-- Ventas tab -->
+      <a href="#" data-section="reportes">📈 Reportes</a>
+      <a href="#" data-section="config">⚙️ Configuración</a>
+    </nav>
+    <div class="bottom">
+      <a class="nav-link nav" href="#" id="logout">🚪 Cerrar sesión</a>
+    </div>
+  </aside>
+
+  <main>
+    <header class="topbar">
+      <button class="button ghost menu-btn" id="menuBtn" aria-label="Mostrar menú" style="display:none">☰</button>
+      <div class="search">
+        <input class="input" id="globalSearch" placeholder="Buscar productos, materiales, órdenes…"/>
+        <button class="button secondary" id="searchBtn">Buscar</button>
+      </div>
+      <div class="user-chip">
+        <div class="avatar" aria-hidden="true"></div>
+        <span id="usernameChip">Usuario</span>
+      </div>
+    </header>
+
+    <div class="container">
+      <!-- Inicio -->
+      <section id="dashboard" class="section card">
+        <div class="kpis">
+          <div class="kpi">
+            <h3>Total de ítems</h3>
+            <div class="value" id="kpiDevices">–</div>
+          </div>
+          <div class="kpi good">
+            <h3>Con stock</h3>
+            <div class="value" id="kpiStock">–</div>
+          </div>
+          <div class="kpi warn">
+            <h3>Órdenes pendientes</h3>
+            <div class="value" id="kpiPending">–</div>
+          </div>
+          <div class="kpi bad">
+            <h3>Órdenes rechazadas</h3>
+            <div class="value" id="kpiRejects">–</div>
+          </div>
+        </div>
+
+        <div class="grid-2">
+          <div class="card" style="padding:20px">
+            <h3 style="margin:0 0 10px 0">Órdenes recientes</h3>
+            <table class="table" id="ordersTable">
+              <thead><tr><th>ID</th><th>Ítem</th><th>Cant.</th><th>Estado</th></tr></thead>
+              <tbody></tbody>
+            </table>
+          </div>
+          <div class="card" style="padding:20px">
+            <h3 style="margin:0 0 10px 0">Stock por categoría</h3>
+            <div id="miniChart" class="placeholder">[gráfico demo]</div>
+          </div>
+        </div>
+      </section>
+
+      <!-- Productos -->
+      <section id="productos" class="section card" style="display:none;padding:20px">
+        <div class="section-head">
+          <h3>Productos</h3>
+          <button class="button" id="addProducto">+ Agregar</button>
+        </div>
+        <table class="table" id="productosTable">
+          <thead><tr><th>ID</th><th>Nombre</th><th>Riesgo</th><th>Precio</th><th>Stock</th><th>Acciones</th></tr></thead>
+          <tbody></tbody>
+        </table>
+      </section>
+
+      <!-- Materiales -->
+      <section id="materiales" class="section card" style="display:none;padding:20px">
+        <div class="section-head">
+          <h3>Materiales</h3>
+          <button class="button" id="addMaterial">+ Agregar</button>
+        </div>
+        <table class="table" id="materialesTable">
+          <thead><tr><th>SKU</th><th>Nombre</th><th>Costo unitario</th><th>Stock</th><th>Acciones</th></tr></thead>
+          <tbody></tbody>
+        </table>
+      </section>
+
+      <!-- Proveedores -->
+      <section id="proveedores" class="section card" style="display:none;padding:20px">
+        <div class="section-head">
+          <h3>Proveedores</h3>
+          <button class="button" id="addProveedor">+ Agregar</button>
+        </div>
+        <table class="table" id="proveedoresTable">
+          <thead><tr><th>ID</th><th>Nombre</th><th>Contacto</th><th>Teléfono</th><th>Email</th><th>Acciones</th></tr></thead>
+          <tbody></tbody>
+        </table>
+      </section>
+
+      <!-- Ensambles -->
+      <section id="ensambles" class="section card" style="display:none;padding:20px">
+        <div class="section-head">
+          <h3>Ensambles</h3>
+          <button class="button" id="addEnsamble">+ Registrar</button>
+        </div>
+        <table class="table" id="ensamblesTable">
+          <thead><tr><th>ID</th><th>Producto</th><th>Componentes</th><th>Fecha</th><th>Responsable</th><th>Acciones</th></tr></thead>
+          <tbody></tbody>
+        </table>
+      </section>
+
+      <!-- Scrap -->
+      <section id="scrap" class="section card" style="display:none;padding:20px">
+        <div class="section-head">
+          <h3>Scrap</h3>
+          <button class="button" id="addScrap">+ Registrar</button>
+        </div>
+        <table class="table" id="scrapTable">
+          <thead><tr><th>ID</th><th>Ítem</th><th>Causa</th><th>Cant.</th><th>Fecha</th><th>Acciones</th></tr></thead>
+          <tbody></tbody>
+        </table>
+      </section>
+
+      <!-- Personal -->
+      <section id="personal" class="section card" style="display:none;padding:20px">
+        <div class="section-head">
+          <h3>Personal</h3>
+          <button class="button" id="addPersona">+ Agregar</button>
+        </div>
+        <table class="table" id="personalTable">
+          <thead><tr><th>ID</th><th>Nombre</th><th>Rol</th><th>Turno</th><th>Correo</th><th>Acciones</th></tr></thead>
+          <tbody></tbody>
+        </table>
+      </section>
+
+      <!-- Ventas -->
+      <section id="ventas" class="section card" style="display:none;padding:20px">
+        <div class="section-head">
+          <h3>Ventas</h3>
+          <button class="button" id="addVenta">+ Registrar</button>
+        </div>
+        <table class="table" id="ventasTable">
+          <thead>
+            <tr><th>ID</th><th>Fecha</th><th>Cliente</th><th>Total</th><th>Items</th><th>Acciones</th></tr>
+          </thead>
+          <tbody></tbody>
+        </table>
+      </section>
+
+      <!-- Reportes -->
+      <section id="reportes" class="section card" style="display:none;padding:20px">
+        <h3 style="margin-top:0">Reportes</h3>
+        <p>Exportaciones rápidas (demo).</p>
+        <button class="button" id="exportCsv">Exportar Inventario CSV</button>
+      </section>
+
+      <!-- Configuración -->
+      <section id="config" class="section card" style="display:none;padding:20px">
+        <h3 style="margin-top:0">Configuración</h3>
+        <div class="form-row">
+          <label>Color de tema</label>
+          <input type="color" id="themePicker" value="#0077C8"/>
+        </div>
+      </section>
+    </div>
+  </main>
+</div>
+
+<!-- Modal genérico -->
+<div class="modal-backdrop" id="modalBackdrop" role="dialog" aria-modal="true" aria-hidden="true">
+  <div class="modal" role="document">
+    <header>
+      <h3 id="modalTitle">Formulario</h3>
+      <button class="button ghost" id="modalClose">Cerrar</button>
+    </header>
+    <form id="modalForm">
+      <div class="form-grid" id="modalFields"></div>
+      <footer>
+        <button type="button" class="button ghost" id="modalCancel">Cancelar</button>
+        <button type="submit" class="button" id="modalSubmit">Guardar</button>
+      </footer>
+    </form>
+  </div>
+</div>
+
+<div class="notification" id="toast" role="status" aria-live="polite">
+  <span id="toastMsg">Guardado</span>
+  <button class="close" aria-label="Cerrar" onclick="document.getElementById('toast').classList.remove('show')">×</button>
+</div>
+
+<!-- Template de campo para Ventas: ID_Personal -->
+<template id="tpl-venta-personal">
+  <div class="form-row" data-field="venta-personal">
+    <label for="ventaPersonal">Atendido por</label>
+    <select id="ventaPersonal" name="idPersonal">
+      <option value="">Cargando…</option>
+    </select>
+  </div>
+</template>
+
+<!-- Helper: inyecta el selector de Personal al abrir el modal de Ventas -->
+<script>
+(function(){
+  const API_BASE = (window.API_BASE) ? window.API_BASE : 'http://localhost:3000/api';
+
+  async function loadPersonalOptions(sel){
+    try{
+      const res = await fetch(API_BASE + '/personal');
+      const data = await res.json();
+      sel.innerHTML = (Array.isArray(data) ? data : []).map(p => {
+        const rol = (p.Rol || p.Cargo || '').toString().trim();
+        return `<option value="${p.ID_Personal}">${p.Nombre}${rol ? ' ('+rol+')' : ''}</option>`;
+      }).join('') || '<option value="">(Sin personal)</option>';
+
+      // Preseleccionar del token, si existe
+      try{
+        const token = sessionStorage.getItem('medsys_token') || localStorage.getItem('medsys_token');
+        const payload = token ? JSON.parse(atob(token)) : null;
+        const pre = payload && payload.user && payload.user.idPersonal;
+        if (pre) sel.value = String(pre);
+      }catch(_e){}
+    }catch(e){
+      sel.innerHTML = '<option value="">Error cargando personal</option>';
+      console.error('Carga de personal falló:', e);
+    }
+  }
+
+  document.addEventListener('DOMContentLoaded', () => {
+    const btn = document.getElementById('addVenta');
+    if (!btn) return;
+
+    btn.addEventListener('click', async () => {
+      // Da tiempo a app.js de abrir el modal y dibujar campos
+      setTimeout(async () => {
+        const fields = document.getElementById('modalFields');
+        if (!fields) return;
+
+        // Evita duplicar el campo si ya existe
+        if (!fields.querySelector('#ventaPersonal')) {
+          const tpl = document.getElementById('tpl-venta-personal');
+          if (tpl && 'content' in document.createElement('template')) {
+            fields.prepend(tpl.content.cloneNode(true));
+          } else {
+            // Fallback si <template> no está soportado
+            const wrap = document.createElement('div');
+            wrap.className = 'form-row';
+            wrap.setAttribute('data-field','venta-personal');
+            wrap.innerHTML = '<label for="ventaPersonal">Atendido por</label><select id="ventaPersonal" name="idPersonal"><option value="">Cargando…</option></select>';
+            fields.prepend(wrap);
+          }
+        }
+
+        const sel = document.getElementById('ventaPersonal');
+        if (sel) await loadPersonalOptions(sel);
+      }, 0);
+    });
+  });
+})();
+</script>
+</body>
+</html>
