@@ -24,18 +24,29 @@
   <div class="auth-wrap">
     <div class="auth-card">
       <!-- Logo de login más grande -->
-      <img class="login-logo" src="img/logo-login.png" alt="Medsys logo">
+      <img class="login-logo" src="img/logo-signin.png" alt="Medsys logo">
       <h1>Iniciar sesión</h1>
       <form id="signinForm">
-        <div>
-          <label>Usuario</label>
-          <input class="input" name="username" autocomplete="username">
+        <div class="form-row">
+          <label for="username">Usuario</label>
+          <input class="input" id="username" name="username" autocomplete="username">
         </div>
-        <div>
-          <label>Contraseña</label>
-          <input class="input" name="password" type="password" autocomplete="current-password">
+
+        <div class="form-row">
+          <label for="password">Contraseña</label>
+          <input class="input" id="password" name="password" type="password" autocomplete="current-password">
         </div>
-        <button class="button" id="btnSignIn" type="submit">Entrar</button>
+
+        <div class="actions">
+          <label style="display:flex;align-items:center;gap:8px">
+            <input type="checkbox" id="remember"> Recordarme
+          </label>
+          <button class="button" id="submitBtn" type="submit">Entrar</button>
+        </div>
+
+        <!-- mensajes que usa signin.js -->
+        <div id="error" class="alert error" role="alert" aria-live="polite"></div>
+        <div id="success" class="alert success" role="status" aria-live="polite"></div>
       </form>
     </div>
   </div>
