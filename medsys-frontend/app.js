@@ -3,6 +3,7 @@
 // ✅ API persistence (productos, materiales, proveedores, personal, ensambles, rechazos, ventas)
 // ✅ Ventas: descuenta stock + captura ID_Personal
 // ✅ Dashboard: KPIs en vivo + actividad reciente + auto-refresh
+// ✅ UX: Esc para cerrar, foco inicial + focus trap, inline errors, loading/empty, highlight row
 // ✅ No optional chaining en asignaciones
 // ✅ Logging global de errores
 
@@ -19,6 +20,17 @@
   }
 })();
 
+// ---------- Quick styles for UX ----------
+(function(){
+  const css = `
+    .inline-error{ color:#c62828; font-size:12px; margin-top:4px; }
+    .is-loading{ opacity:.7 }
+    @keyframes rowflash { 0%{ background:#fff3cd } 100%{ background:transparent } }
+    .flash{ animation: rowflash 1s ease-in-out 1 }
+  `;
+  const st = document.createElement('style'); st.textContent = css; document.head.appendChild(st);
+})();
+
 // ---------- Navegación ----------
 const sidebar = document.getElementById('sidebar');
 const menuBtn = document.getElementById('menuBtn');
@@ -32,7 +44,8 @@ document.querySelectorAll('.nav a[data-section]').forEach(link=>{
     if(innerWidth<720 && sidebar) sidebar.classList.remove('open');
     if (id === 'dashboard') { refreshDashboard().catch(()=>{}); }
   });
-});
+}); // <-- faltaba este cierre
+
 const logoutBtn = document.getElementById('logout');
 if (logoutBtn) logoutBtn.addEventListener('click', (e)=>{
   e.preventDefault(); sessionStorage.removeItem('medsys_token'); localStorage.removeItem('medsys_token'); location.href='signin.html';
@@ -65,12 +78,29 @@ async function fetchJson(url, options = {}){
 // Small helper to safely set textContent
 function setText(id, val){ const el = document.getElementById(id); if(el) el.textContent = String(val); }
 
-// Render helper
-function renderTable(el, rows, mapRow){
+// Render helpers (tables)
+function setTableLoading(tableEl, text='Cargando…'){
+  if(!tableEl) return;
+  const tbody = tableEl.querySelector('tbody'); if(!tbody) return;
+  const cols = (tableEl.querySelectorAll('thead th')||[]).length || 1;
+  tbody.innerHTML = '<tr class="is-loading"><td colspan="'+cols+'">'+text+'</td></tr>';
+}
+function setTableEmpty(tableEl, text='Sin datos'){
+  if(!tableEl) return;
+  const tbody = tableEl.querySelector('tbody'); if(!tbody) return;
+  const cols = (tableEl.querySelectorAll('thead th')||[]).length || 1;
+  tbody.innerHTML = '<tr><td colspan="'+cols+'">'+text+'</td></tr>';
+}
+function renderTable(el, rows, mapRow, opts){
   if(!el) return;
   const tbody = el.querySelector('tbody');
   if(!tbody) return;
-  tbody.innerHTML = (rows || []).map(mapRow).join('');
+  if (!rows || !rows.length) { setTableEmpty(el); return; }
+  tbody.innerHTML = rows.map(mapRow).join('');
+  if (opts && opts.highlightId != null) {
+    const tr = tbody.querySelector('tr[data-id="'+opts.highlightId+'"]');
+    if (tr) { tr.classList.add('flash'); setTimeout(()=>tr.classList.remove('flash'), 1200); }
+  }
 }
 
 function showToast(msg){
@@ -138,30 +168,94 @@ function buildField(f, initial) {
   return wrap;
 }
 
+function clearFieldErrors(){
+  if (!modalFields) return;
+  modalFields.querySelectorAll('.inline-error').forEach(el => el.remove());
+}
+function setFieldError(name, msg){
+  if (!modalFields) return;
+  const input = modalFields.querySelector('[name="'+name+'"]');
+  if (!input) return;
+  let err = document.createElement('div');
+  err.className = 'inline-error';
+  err.textContent = msg;
+  input.parentElement.appendChild(err);
+}
+
+// focus trap helpers
+let _trapHandler = null;
+let _lastFocus = null;
+function enableFocusTrap(){
+  const focusables = modalEl.querySelectorAll('button, [href], input, select, textarea, [tabindex]:not([tabindex="-1"])');
+  const first = focusables[0], last = focusables[focusables.length - 1];
+  _trapHandler = function(e){
+    if (e.key === 'Escape'){ window.modal.close(); }
+    if (e.key !== 'Tab') return;
+    if (e.shiftKey){
+      if (document.activeElement === first){ e.preventDefault(); last.focus(); }
+    } else {
+      if (document.activeElement === last){ e.preventDefault(); first.focus(); }
+    }
+  };
+  document.addEventListener('keydown', _trapHandler);
+}
+function disableFocusTrap(){
+  if (_trapHandler){ document.removeEventListener('keydown', _trapHandler); _trapHandler = null; }
+}
+
 window.modal = {
   open(config, initial = {}) {
     if(!modalEl) return alert('No se encontró el modal en el HTML');
+    _lastFocus = document.activeElement;
     const title = config.title || 'Formulario';
     const fields = config.fields || [];
     const submitText = config.submitText || 'Guardar';
     const onSubmit = config.onSubmit;
 
     if (modalTitle) modalTitle.textContent = title;
-    if (modalSubmitBtn) modalSubmitBtn.textContent = submitText;
+    if (modalSubmitBtn) { modalSubmitBtn.textContent = submitText; modalSubmitBtn.disabled = false; modalSubmitBtn.removeAttribute('aria-busy'); }
+    clearFieldErrors();
     if (modalFields) modalFields.innerHTML = '';
     fields.forEach(f => { if (modalFields) modalFields.appendChild(buildField(f, initial)); });
 
     modalEl.classList.add('show');
+
+    // autofocus first enabled input
+    setTimeout(()=>{
+      const firstInput = modalFields && modalFields.querySelector('input:not([disabled]),select:not([disabled]),textarea:not([disabled])');
+      if (firstInput) firstInput.focus();
+    }, 0);
+
+    enableFocusTrap();
+
     if (modalForm) modalForm.onsubmit = async (e) => {
       e.preventDefault();
+      clearFieldErrors();
       const raw = Object.fromEntries(new FormData(modalForm).entries());
+      // keep disabled field values from initial
       fields.forEach(f => { if (f.disabled && initial && initial[f.name] !== undefined) raw[f.name] = initial[f.name]; });
+
+      // basic required check
+      let hasErr = false;
+      fields.forEach(f=>{
+        if (f.required && (!raw[f.name] || String(raw[f.name]).trim() === '')){
+          hasErr = true; setFieldError(f.name, 'Requerido');
+        }
+      });
+      if (hasErr) return;
+
       try {
+        if (modalSubmitBtn){ modalSubmitBtn.disabled = true; modalSubmitBtn.setAttribute('aria-busy','true'); modalSubmitBtn.textContent = 'Guardando…'; }
         if (onSubmit) await onSubmit(raw);
         window.modal.close();
       } catch (err) {
         console.error(err);
-        alert(err.message || 'Error al guardar');
+        if (err && err.data && err.data.errors && typeof err.data.errors === 'object'){
+          Object.keys(err.data.errors).forEach(k=> setFieldError(k, String(err.data.errors[k])));
+        }else{
+          setFieldError(fields[0] && fields[0].name || 'form', String(err.message || 'Error al guardar'));
+        }
+        if (modalSubmitBtn){ modalSubmitBtn.disabled = false; modalSubmitBtn.removeAttribute('aria-busy'); modalSubmitBtn.textContent = submitText; }
       }
     };
   },
@@ -169,6 +263,8 @@ window.modal = {
     if(!modalEl) return;
     modalEl.classList.remove('show');
     if (modalForm) modalForm.reset();
+    disableFocusTrap();
+    if (_lastFocus && typeof _lastFocus.focus === 'function'){ try{ _lastFocus.focus(); }catch(e){} }
   }
 };
 if (modalCloseBtn)  modalCloseBtn.addEventListener('click', () => window.modal.close());
@@ -275,6 +371,8 @@ async function renderActivity(){
   const table = document.getElementById('ordersTable');
   if (!table) return;
 
+  setTableLoading(table, 'Cargando actividad…');
+
   try{
     const [ventas, ensambles, rechazos] = await Promise.all([
       VentasAPI.list().catch(()=>[]),
@@ -325,7 +423,7 @@ async function renderActivity(){
     });
   }catch(e){
     console.warn('renderActivity error:', e);
-    const tbody = table.querySelector('tbody'); if (tbody) tbody.innerHTML = '<tr><td colspan="4">Sin actividad</td></tr>';
+    setTableEmpty(table, 'Sin actividad');
   }
 }
 
@@ -336,8 +434,9 @@ async function renderOtros(){
 
   // Materiales (API)
   try{
+    const table = document.getElementById('materialesTable'); setTableLoading(table);
     const mats = await MaterialesAPI.list();
-    renderTable(document.getElementById('materialesTable'), mats, function(r){
+    renderTable(table, mats, function(r){
       return '<tr data-id="'+r.id+'">'
         +'<td>'+r.id+'</td>'
         +'<td>'+r.Nombre+'</td>'
@@ -351,8 +450,9 @@ async function renderOtros(){
 
   // Proveedores (API)
   try{
+    const table = document.getElementById('proveedoresTable'); setTableLoading(table);
     const provs = await ProveedoresAPI.list();
-    renderTable(document.getElementById('proveedoresTable'), provs, function(r){
+    renderTable(table, provs, function(r){
       return '<tr data-id="'+r.id+'"><td>'+r.id+'</td><td>'+r.Nombre+'</td><td>'+(r.Contacto||'')+'</td><td>'+(r.Telefono||'')+'</td><td>'+(r.Email||'')+'</td>'
         +'<td><button class="button secondary btn-edit" data-entity="proveedor">Editar</button>'
         +'    <button class="button ghost btn-del" data-entity="proveedor">Eliminar</button></td></tr>';
@@ -361,8 +461,9 @@ async function renderOtros(){
 
   // Ensambles (API)
   try{
+    const table = document.getElementById('ensamblesTable'); setTableLoading(table);
     const ens = await EnsamblesAPI.list();
-    renderTable(document.getElementById('ensamblesTable'), ens, function(r){
+    renderTable(table, ens, function(r){
       return '<tr data-id="'+r.id+'"><td>'+r.id+'</td><td>'+(r.Producto||'')+'</td><td>'+(r.Componentes||'')+'</td><td>'+fmtDateISO(r.Fecha)+'</td><td>'+(r.Responsable||'')+'</td>'
         +'<td><button class="button secondary btn-edit" data-entity="ensamble">Editar</button>'
         +'    <button class="button ghost btn-del" data-entity="ensamble">Eliminar</button></td></tr>';
@@ -371,19 +472,21 @@ async function renderOtros(){
 
   // Rechazos (API)
   try{
+    const table = document.getElementById('scrapTable'); setTableLoading(table);
     const rs = await RechazosAPI.list();
-    renderTable(document.getElementById('scrapTable'), rs, function(r){
+    renderTable(table, rs, function(r){
       return '<tr data-id="'+r.id+'"><td>'+r.id+'</td><td>'+(r.Dispositivo||'')+'</td><td>'+(r.Causa||'')+'</td><td>'+(r.Cantidad||0)+'</td><td>'+fmtDateISO(r.Fecha)+'</td>'
         +'<td><button class="button secondary btn-edit" data-entity="rechazo">Editar</button>'
         +'    <button class="button ghost btn-del" data-entity="rechazo">Eliminar</button></td></tr>';
     });
   }catch(e){ console.warn('Rechazos API', e); }
 
-  // Personal (API)
+  // Personal (API) — mostrar CORREO (tu HTML tiene la columna "Correo")
   try{
+    const table = document.getElementById('personalTable'); setTableLoading(table);
     const per = await PersonalAPI.list();
-    renderTable(document.getElementById('personalTable'), per, function(r){
-      return '<tr data-id="'+r.id+'"><td>'+r.id+'</td><td>'+r.Nombre+'</td><td>'+(r.Rol||'')+'</td><td>'+(r.Turno||'')+'</td><td>'+(r.Telefono||'')+'</td>'
+    renderTable(table, per, function(r){
+      return '<tr data-id="'+r.id+'"><td>'+r.id+'</td><td>'+r.Nombre+'</td><td>'+(r.Rol||'')+'</td><td>'+(r.Turno||'')+'</td><td>'+(r.Correo||'')+'</td>' +'<td>'+(r.Telefono||'')+'</td>'
         +'<td><button class="button secondary btn-edit" data-entity="persona">Editar</button>'
         +'    <button class="button ghost btn-del" data-entity="persona">Eliminar</button></td></tr>';
     });
@@ -393,19 +496,22 @@ async function renderOtros(){
   const ventasTable = document.getElementById('ventasTable');
   if (ventasTable) {
     try{
+      setTableLoading(ventasTable);
       const vs = await VentasAPI.list();
       renderTable(ventasTable, vs, function(r){
         return '<tr data-id="'+r.id+'"><td>'+r.id+'</td><td>'+fmtDateISO(r.Fecha)+'</td><td>'+(r.Cliente||'')+'</td><td>'+Number(r.Total).toFixed(2)+'</td><td>'+(r.Items||0)+'</td>'
           +'<td><button class="button ghost btn-del" data-entity="venta">Eliminar</button></td></tr>';
-      });
+      }, window.__highlight && window.__highlight.venta ? { highlightId: window.__highlight.venta } : undefined);
+      if (window.__highlight) delete window.__highlight.venta;
     }catch(e){ console.warn('Ventas API', e); }
   }
 }
 
 async function renderProductosFromAPI(){
   try{
+    const table = document.getElementById('productosTable'); setTableLoading(table);
     const productos = await ProductosAPI.list();
-    renderTable(document.getElementById('productosTable'), productos, function(p){
+    renderTable(table, productos, function(p){
       return '<tr data-id="'+p.id+'"><td>'+p.id+'</td><td>'+p.Nombre+'</td><td>'+(p.Clasificacion_Riesgo||'')+'</td><td>$'+Number(p.Precio).toFixed(2)+'</td><td>'+p.Stock_Actual+'</td>'
         +'<td><button class="button secondary btn-edit" data-entity="producto">Editar</button>'
         +'    <button class="button ghost btn-del" data-entity="producto">Eliminar</button></td></tr>';
@@ -563,18 +669,28 @@ if (addScrapBtn) addScrapBtn.addEventListener('click', async function(){
 
 // ---- Personal (API) ----
 const addPersonaBtn = document.getElementById('addPersona');
-if (addPersonaBtn) addPersonaBtn.addEventListener('click', function(){
+if (addPersonaBtn) addPersonaBtn.addEventListener('click', ()=>{
   modal.open({
     title:'Agregar personal',
     fields:[
       {name:'Nombre', label:'Nombre', required:true, span2:true},
       {name:'Rol', label:'Rol'},
       {name:'Turno', label:'Turno', type:'select', options:['Día','Noche','Mixto']},
+      {name:'Correo', label:'Correo', type:'email', span2:true},
+      {name:'FechaIngreso', label:'Fecha de ingreso', type:'date'},
       {name:'Telefono', label:'Teléfono'}
     ],
-    onSubmit: async function(v){
-      await PersonalAPI.create({ nombre:v.Nombre, rol:v.Rol, turno:v.Turno, telefono:v.Telefono });
-      showToast('Persona agregada'); await refreshDashboard();
+    onSubmit: async (v)=>{
+      await PersonalAPI.create({
+        nombre: v.Nombre,
+        rol: v.Rol,
+        turno: v.Turno,
+        correo: v.Correo,
+        fechaIngreso: v.FechaIngreso,   // 'YYYY-MM-DD'
+        telefono: v.Telefono
+      });
+      showToast('Persona agregada');
+      await refreshDashboard();
     }
   });
 });
@@ -622,28 +738,19 @@ if (addVentaBtn) addVentaBtn.addEventListener('click', async function(){
     ],
     onSubmit: async function(v){
       try{
-        // Parsear id de producto desde el texto "id - nombre (stock: x)"
         const idTxt = String(v.ID_DispositivoMed).split(' - ')[0];
-
-        // Armado del detalle (enviamos precioUnitario; si viene vacío, backend toma el de catálogo)
         const precioUnit = (v.Precio === '' || v.Precio == null) ? undefined : Number(v.Precio);
         const items = [{
           idDispositivo: Number(idTxt || 0),
           cantidad: Number(v.Cantidad || 1),
           precioUnitario: precioUnit
         }];
-
-        // idPersonal es opcional
         const idPersonal = (v.idPersonal === '' || v.idPersonal == null) ? null : Number(v.idPersonal);
 
-        await VentasAPI.create({
-          cliente: v.Cliente,
-          fecha: v.Fecha,
-          idPersonal: idPersonal,
-          items
-        });
-
+        const resp = await VentasAPI.create({ cliente: v.Cliente, fecha: v.Fecha, idPersonal, items });
         showToast('Venta registrada');
+        window.__highlight = window.__highlight || {};
+        if (resp && resp.id) window.__highlight.venta = Number(resp.id);
         await renderProductosFromAPI();
         await refreshDashboard();
       }catch(err){
@@ -663,9 +770,11 @@ if (addVentaBtn) addVentaBtn.addEventListener('click', async function(){
 document.addEventListener('click', async function(e){
   const btnEdit = e.target.closest && e.target.closest('.btn-edit');
   const btnDel  = e.target.closest && e.target.closest('.btn-del');
+
   if(btnEdit){
     const entity = btnEdit.dataset.entity;
     const tr = btnEdit.closest('tr');
+
     if(entity==='producto'){
       const id = Number(tr.dataset.id);
       modal.open({
@@ -691,9 +800,9 @@ document.addEventListener('click', async function(e){
         }
       }, {id});
     }
+
     if(entity==='material'){
       const id = Number(tr.dataset.id);
-      // carga actual del material + proveedores
       const results = await Promise.all([
         MaterialesAPI.list().catch(function(){ return []; }),
         ProveedoresAPI.list().catch(function(){ return []; })
@@ -737,6 +846,7 @@ document.addEventListener('click', async function(e){
         idProveedor: String(m.ID_Proveedor || '0')
       });
     }
+
     if(entity==='proveedor'){
       const id = Number(tr.dataset.id);
       modal.open({
@@ -754,9 +864,9 @@ document.addEventListener('click', async function(e){
         }
       }, {id});
     }
+
     if(entity==='ensamble'){
       const id = Number(tr.dataset.id);
-      // Obtener datos actuales y productos para prellenar
       let cur = {}; let productos = [];
       try{
         const results = await Promise.all([EnsamblesAPI.list(), ProductosAPI.list()]);
@@ -765,7 +875,6 @@ document.addEventListener('click', async function(e){
         productos = prods || [];
       }catch(e){}
       const options = productos.map(function(p){ return p.id+' - '+p.Nombre; });
-      // intentar encontrar el id por nombre para pre-selección
       let initialId = '';
       if (cur && cur.Producto) {
         const match = productos.find(function(p){ return String(p.Nombre) === String(cur.Producto); });
@@ -803,6 +912,7 @@ document.addEventListener('click', async function(e){
         Responsable: cur.Responsable || ''
       });
     }
+
     if(entity==='rechazo'){
       const id = Number(tr.dataset.id);
       let productos=[]; try{ productos = await ProductosAPI.list(); }catch(e){ console.error(e); showToast('No se pudo cargar dispositivos'); return; }
@@ -827,6 +937,7 @@ document.addEventListener('click', async function(e){
         }
       }, {id});
     }
+
     if(entity==='persona'){
       const id = Number(tr.dataset.id);
       modal.open({
@@ -836,15 +947,25 @@ document.addEventListener('click', async function(e){
           {name:'Nombre', label:'Nombre', span2:true},
           {name:'Rol', label:'Rol'},
           {name:'Turno', label:'Turno'},
+          {name:'Correo', label:'Correo', type:'email', span2:true},
+          {name:'FechaIngreso', label:'Fecha de ingreso', type:'date'},
           {name:'Telefono', label:'Teléfono'}
         ],
-        onSubmit: async function(v){
-          await PersonalAPI.update(id, { nombre:v.Nombre, rol:v.Rol, turno:v.Turno, telefono:v.Telefono });
+        onSubmit: async (v)=>{
+          await PersonalAPI.update(id, {
+            nombre: v.Nombre,
+            rol: v.Rol,
+            turno: v.Turno,
+            correo: v.Correo,
+            fechaIngreso: v.FechaIngreso,
+            telefono: v.Telefono
+          });
           showToast('Registro actualizado'); await refreshDashboard();
         }
-      }, {id});
+      }, { id });
     }
-  }
+  } // <-- cierre de if(btnEdit)
+
   if(btnDel){
     const entity = btnDel.dataset.entity;
     const tr = btnDel.closest('tr');
