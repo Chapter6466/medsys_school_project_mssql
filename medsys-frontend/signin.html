@@ -1,54 +1,70 @@
 <!DOCTYPE html>
 <html lang="es">
 <head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Medsys • Iniciar sesión</title>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Medsys Technologies • Acceso</title>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;600;700;800&family=Roboto:wght@400;500;700&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="styles.css">
+  <link rel="stylesheet" href="styles.css"/>
   <script defer src="signin.js"></script>
-  <style>
-    /* Contenedor simple para centrar */
-    .auth-wrap{min-height:100vh;display:grid;place-items:center;padding:24px;background:#f6f8fb}
-    .auth-card{background:#fff;border-radius:16px;box-shadow:0 6px 24px rgba(0,0,0,.08);padding:28px;max-width:420px;width:100%}
-    .auth-card h1{margin:.5rem 0 1rem 0;text-align:center}
-    .auth-card form{display:grid;gap:12px;margin-top:12px}
-    .auth-card .input{padding:10px 12px;border:1px solid #d9e1ee;border-radius:10px}
-    .auth-card .button{padding:10px 12px;border-radius:10px;background:#0077C8;color:#fff;border:none;cursor:pointer}
-    .auth-card .button:disabled{opacity:.6}
-  </style>
 </head>
 <body>
-  <div class="auth-wrap">
-    <div class="auth-card">
-      <!-- Logo de login más grande -->
-      <img class="login-logo" src="img/logo-signin.png" alt="Medsys logo">
-      <h1>Iniciar sesión</h1>
-      <form id="signinForm">
+  <div class="signin-wrap">
+    <div class="signin-card">
+      <!-- Encabezado con logo + texto (estructura anterior) -->
+      <div class="signin-header">
+        <img src="img/logo-signin.png" alt="Logo Medsys"/>
+        <div>
+          <h2>Bienvenido a Medsys</h2>
+          <p class="signin-sub">Inicie sesión para continuar</p>
+        </div>
+      </div>
+
+      <form id="signinForm" novalidate>
         <div class="form-row">
           <label for="username">Usuario</label>
-          <input class="input" id="username" name="username" autocomplete="username">
+          <input class="input" id="username" name="username" placeholder="Usuario" autocomplete="username" required/>
         </div>
 
         <div class="form-row">
           <label for="password">Contraseña</label>
-          <input class="input" id="password" name="password" type="password" autocomplete="current-password">
+          <div class="input-group" style="position:relative">
+            <input class="input" id="password" name="password" type="password" placeholder="Contraseña" autocomplete="current-password" required/>
+            <!-- Toggle mostrar/ocultar -->
+            <button type="button" id="togglePwd" aria-label="Mostrar u ocultar contraseña"
+                    style="position:absolute;right:10px;top:50%;transform:translateY(-50%);background:transparent;border:0;cursor:pointer;font-size:14px">👁️</button>
+          </div>
         </div>
 
         <div class="actions">
           <label style="display:flex;align-items:center;gap:8px">
-            <input type="checkbox" id="remember"> Recordarme
+            <input type="checkbox" id="remember"/> Recordarme
           </label>
-          <button class="button" id="submitBtn" type="submit">Entrar</button>
+          <button class="button" id="submitBtn" type="submit">Ingresar</button>
         </div>
 
-        <!-- mensajes que usa signin.js -->
         <div id="error" class="alert error" role="alert" aria-live="polite"></div>
         <div id="success" class="alert success" role="status" aria-live="polite"></div>
       </form>
     </div>
   </div>
+
+  <!-- Pequeño helper para mostrar/ocultar contraseña -->
+  <script>
+    document.addEventListener('DOMContentLoaded', () => {
+      const pwd = document.getElementById('password');
+      const tgl = document.getElementById('togglePwd');
+      if (pwd && tgl) {
+        tgl.addEventListener('click', () => {
+          const is = pwd.type === 'password';
+          pwd.type = is ? 'text' : 'password';
+          tgl.textContent = is ? '🙈' : '👁️';
+          tgl.setAttribute('aria-label', is ? 'Ocultar contraseña' : 'Mostrar contraseña');
+        });
+      }
+    });
+  </script>
 </body>
 </html>

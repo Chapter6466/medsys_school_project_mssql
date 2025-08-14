@@ -775,11 +775,17 @@ document.addEventListener('click', async function(e){
     const entity = btnEdit.dataset.entity;
     const tr = btnEdit.closest('tr');
 
-    if(entity==='producto'){
+    if (entity === 'producto') {
       const id = Number(tr.dataset.id);
+      let p = {};
+      try {
+        const list = await ProductosAPI.list();
+        p = (list || []).find(x => Number(x.id) === id) || {};
+      } catch {}
+
       modal.open({
-        title:'Editar producto',
-        fields:[
+        title: 'Editar producto',
+        fields: [
           {name:'id', label:'ID', type:'number', disabled:true},
           {name:'Nombre', label:'Nombre', span2:true},
           {name:'Descripcion', label:'Descripción', span2:true},
@@ -790,16 +796,33 @@ document.addEventListener('click', async function(e){
           {name:'Stock_Actual', label:'Stock', type:'number'},
           {name:'Stock_Minimo', label:'Stock mínimo', type:'number'}
         ],
-        onSubmit: async function(v){
+        onSubmit: async (v) => {
           await ProductosAPI.update(id, {
-            nombre:v.Nombre, descripcion:v.Descripcion, riesgo:v.Clasificacion_Riesgo,
-            aprobadoPor:v.Aprobado_Por, uso:v.Uso_Especifico, precio:Number(v.Precio||0),
-            stock:Number(v.Stock_Actual||0), stockMin:Number(v.Stock_Minimo||0)
+            nombre: v.Nombre,
+            descripcion: v.Descripcion,
+            riesgo: v.Clasificacion_Riesgo,
+            aprobadoPor: v.Aprobado_Por,
+            uso: v.Uso_Especifico,
+            precio: Number(v.Precio || 0),
+            stock: Number(v.Stock_Actual || 0),
+            stockMin: Number(v.Stock_Minimo || 0)
           });
-          showToast('Producto actualizado'); await renderProductosFromAPI(); await refreshDashboard();
+          showToast('Producto actualizado');
+          await renderProductosFromAPI(); await refreshDashboard();
         }
-      }, {id});
+      }, {
+        id: p.id,
+        Nombre: p.Nombre || '',
+        Descripcion: p.Descripcion || '',
+        Clasificacion_Riesgo: p.Clasificacion_Riesgo || '',
+        Aprobado_Por: p.Aprobado_Por || '',
+        Uso_Especifico: p.Uso_Especifico || '',
+        Precio: p.Precio || 0,
+        Stock_Actual: p.Stock_Actual || 0,
+        Stock_Minimo: p.Stock_Minimo || 0
+      });
     }
+
 
     if(entity==='material'){
       const id = Number(tr.dataset.id);
@@ -847,8 +870,14 @@ document.addEventListener('click', async function(e){
       });
     }
 
-    if(entity==='proveedor'){
+    if (entity === 'proveedor') {
       const id = Number(tr.dataset.id);
+      let pv = {};
+      try {
+        const list = await ProveedoresAPI.list();
+        pv = (list || []).find(x => Number(x.id) === id) || {};
+      } catch {}
+
       modal.open({
         title:'Editar proveedor',
         fields:[
@@ -858,46 +887,51 @@ document.addEventListener('click', async function(e){
           {name:'Telefono', label:'Teléfono'},
           {name:'Email', label:'Email', span2:true}
         ],
-        onSubmit: async function(v){
+        onSubmit: async (v)=>{
           await ProveedoresAPI.update(id, { nombre:v.Nombre, contacto:v.Contacto, telefono:v.Telefono, email:v.Email });
           showToast('Proveedor actualizado'); await refreshDashboard();
         }
-      }, {id});
+      }, {
+        id: pv.id,
+        Nombre: pv.Nombre || '',
+        Contacto: pv.Contacto || '',
+        Telefono: pv.Telefono || '',
+        Email: pv.Email || ''
+      });
     }
 
-    if(entity==='ensamble'){
+    if (entity === 'ensamble') {
       const id = Number(tr.dataset.id);
       let cur = {}; let productos = [];
-      try{
+      try {
         const results = await Promise.all([EnsamblesAPI.list(), ProductosAPI.list()]);
-        const enList = results[0], prods = results[1];
-        cur = (enList || []).find(function(x){ return Number(x.id) === id; }) || {};
-        productos = prods || [];
-      }catch(e){}
-      const options = productos.map(function(p){ return p.id+' - '+p.Nombre; });
-      let initialId = '';
+        cur = (results[0] || []).find(x => Number(x.id) === id) || {};
+        productos = results[1] || [];
+      } catch {}
+
+      const options = productos.map(p => p.id + ' - ' + p.Nombre);
+      let initialOption = '';
       if (cur && cur.Producto) {
-        const match = productos.find(function(p){ return String(p.Nombre) === String(cur.Producto); });
-        if (match) initialId = String(match.id);
+        const match = productos.find(p => String(p.Nombre) === String(cur.Producto));
+        if (match) initialOption = match.id + ' - ' + match.Nombre;
       }
 
       modal.open({
         title:'Editar ensamble',
         fields:[
           {name:'id', label:'ID', type:'number', disabled:true},
-          {name:'ID_DispositivoMed', label:'Dispositivo', type:'select', options: options},
+          {name:'ID_DispositivoMed', label:'Dispositivo', type:'select', options},
           {name:'Componentes', label:'Componentes', span2:true},
           {name:'Fecha', label:'Fecha', type:'date'},
           {name:'Responsable', label:'Responsable'}
         ],
-        onSubmit: async function(v){
-          const hasSel = v.ID_DispositivoMed && String(v.ID_DispositivoMed).trim() !== '';
+        onSubmit: async (v)=>{
           const payload = {
             componentes: v.Componentes,
             fecha: v.Fecha,
             responsable: v.Responsable
           };
-          if (hasSel) {
+          if (v.ID_DispositivoMed && String(v.ID_DispositivoMed).trim() !== '') {
             const idTxt = String(v.ID_DispositivoMed).split(' - ')[0];
             payload.idDispositivo = Number(idTxt || 0);
           }
@@ -905,18 +939,28 @@ document.addEventListener('click', async function(e){
           showToast('Ensamble actualizado'); await refreshDashboard();
         }
       }, {
-        id: id,
-        ID_DispositivoMed: initialId,
+        id,
+        ID_DispositivoMed: initialOption,
         Componentes: cur.Componentes || '',
         Fecha: cur.Fecha ? fmtDateISO(cur.Fecha) : '',
         Responsable: cur.Responsable || ''
       });
     }
 
-    if(entity==='rechazo'){
+
+    if (entity === 'rechazo') {
       const id = Number(tr.dataset.id);
-      let productos=[]; try{ productos = await ProductosAPI.list(); }catch(e){ console.error(e); showToast('No se pudo cargar dispositivos'); return; }
-      const options = productos.map(function(p){ return p.id+' - '+p.Nombre; });
+      let r = {}; let productos = [];
+      try {
+        const results = await Promise.all([RechazosAPI.list().catch(()=>[]), ProductosAPI.list().catch(()=>[])]);
+        r = (results[0] || []).find(x => Number(x.id) === id) || {};
+        productos = results[1] || [];
+      } catch {}
+
+      const options = productos.map(p => p.id + ' - ' + p.Nombre);
+      const match = productos.find(p => Number(p.id) === Number(r.ID_DispositivoMed));
+      const initialOption = match ? (match.id + ' - ' + match.Nombre) : '';
+
       modal.open({
         title:'Editar rechazo',
         fields:[
@@ -926,20 +970,34 @@ document.addEventListener('click', async function(e){
           {name:'Cantidad', label:'Cantidad', type:'number'},
           {name:'Fecha', label:'Fecha', type:'date'}
         ],
-        onSubmit: async function(v){
-          try{
-            const idTxt = String(v.ID_DispositivoMed).split(' - ')[0];
-            await RechazosAPI.update(id, {
-              idDispositivo:Number(idTxt||0), causa:v.Causa, cantidad:Number(v.Cantidad||0), fecha:v.Fecha
-            });
-            showToast('Rechazo actualizado'); await refreshDashboard();
-          }catch(err){ console.error(err); showToast('Error: '+err.message); }
+        onSubmit: async (v)=>{
+          const idTxt = String(v.ID_DispositivoMed).split(' - ')[0];
+          await RechazosAPI.update(id, {
+            idDispositivo:Number(idTxt||0),
+            causa:v.Causa,
+            cantidad:Number(v.Cantidad||0),
+            fecha:v.Fecha
+          });
+          showToast('Rechazo actualizado'); await refreshDashboard();
         }
-      }, {id});
+      }, {
+        id: r.id,
+        ID_DispositivoMed: initialOption,
+        Causa: r.Causa || '',
+        Cantidad: r.Cantidad || 0,
+        Fecha: r.Fecha ? fmtDateISO(r.Fecha) : ''
+      });
     }
 
-    if(entity==='persona'){
+
+    if (entity === 'persona') {
       const id = Number(tr.dataset.id);
+      let per = {};
+      try {
+        const list = await PersonalAPI.list();
+        per = (list || []).find(x => Number(x.id) === id) || {};
+      } catch {}
+
       modal.open({
         title:'Editar personal',
         fields:[
@@ -953,16 +1011,20 @@ document.addEventListener('click', async function(e){
         ],
         onSubmit: async (v)=>{
           await PersonalAPI.update(id, {
-            nombre: v.Nombre,
-            rol: v.Rol,
-            turno: v.Turno,
-            correo: v.Correo,
-            fechaIngreso: v.FechaIngreso,
-            telefono: v.Telefono
+            nombre: v.Nombre, rol: v.Rol, turno: v.Turno, correo: v.Correo,
+            fechaIngreso: v.FechaIngreso, telefono: v.Telefono
           });
           showToast('Registro actualizado'); await refreshDashboard();
         }
-      }, { id });
+      }, {
+        id: per.id,
+        Nombre: per.Nombre || '',
+        Rol: per.Rol || '',
+        Turno: per.Turno || '',
+        Correo: per.Correo || '',
+        FechaIngreso: per.FechaIngreso ? fmtDateISO(per.FechaIngreso) : '',
+        Telefono: per.Telefono || ''
+      });
     }
   } // <-- cierre de if(btnEdit)
 
