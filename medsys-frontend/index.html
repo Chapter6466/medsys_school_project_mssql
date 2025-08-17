@@ -8,11 +8,18 @@
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;600;700;800&family=Roboto:wght@400;500;700&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="styles.css"/>
-  <!-- Load app.js with defer so it runs after the DOM is parsed -->
+  <!-- Chart.js -->
+  <script defer src="https://cdn.jsdelivr.net/npm/chart.js@4.4.3/dist/chart.umd.min.js"></script>
+  <!-- Chart.js DataLabels plugin -->
+  <script defer src="https://cdn.jsdelivr.net/npm/chartjs-plugin-datalabels@2.2.0/dist/chartjs-plugin-datalabels.min.js"></script>
   <script defer src="app.js"></script>
   <style>
     /* optional: keep KPI row sticky on scroll */
     .kpis.sticky { position: sticky; top: 0; z-index: 5; background: #fff; padding-top: 10px; }
+    .filters { display:flex; gap:10px; align-items:center; flex-wrap:wrap; margin-bottom:12px; }
+    .filters label { font-size:13px; color:#555; }
+    .filters select { padding:6px 8px; border:1px solid #ddd; border-radius:6px; background:#fff; }
+    .filters .button.ghost { padding:6px 10px; }
   </style>
 </head>
 <body>
@@ -114,12 +121,48 @@
 
       <!-- Productos -->
       <section id="productos" class="section card" style="display:none;padding:20px">
-        <div class="section-head">
-          <h3>Productos</h3>
+        <div class="section-head" style="gap:14px; align-items:flex-end;">
+          <h3 style="margin-right:auto">Productos</h3>
+          <!-- Filtros -->
+          <div class="filters">
+            <label for="filterRisk">Riesgo:</label>
+            <select id="filterRisk">
+              <option value="">Todos</option>
+              <option>Clase I</option>
+              <option>Clase II</option>
+              <option>Clase III</option>
+            </select>
+
+            <label for="filterUse">Uso:</label>
+            <select id="filterUse">
+              <option value="">Todos</option>
+              <option>Diagnóstico</option>
+              <option>Tratamiento</option>
+              <option>Monitoreo</option>
+              <option>Prevención</option>
+              <option>Rehabilitación</option>
+              <option>Otro</option>
+            </select>
+
+            <button class="button ghost" id="clearProdFilters">Limpiar</button>
+          </div>
+
           <button class="button" id="addProducto">+ Agregar</button>
         </div>
+
         <table class="table" id="productosTable">
-          <thead><tr><th>ID</th><th>Nombre</th><th>Riesgo</th><th>Precio</th><th>Stock</th><th>Acciones</th></tr></thead>
+          <thead>
+            <tr>
+              <th>ID</th>
+              <th>Nombre</th>
+              <th>Clase de riesgo</th>
+              <th>Uso</th>
+              <th>Aprobado por</th>
+              <th>Precio</th>
+              <th>Stock</th>
+              <th>Acciones</th>
+            </tr>
+          </thead>
           <tbody></tbody>
         </table>
       </section>
@@ -167,7 +210,7 @@
           <button class="button" id="addScrap">+ Registrar</button>
         </div>
         <table class="table" id="scrapTable">
-          <thead><tr><th>ID</th><th>Ítem</th><th>Causa</th><th>Cant.</th><th>Fecha</th><th>Acciones</th></tr></thead>
+          <thead><tr><th>ID</th><th>Ítem</th><th>Causa</th><th>Cant.</th><th>Fecha</th><th>Reportado por</th><th>Acciones</th></tr></thead>
           <tbody></tbody>
         </table>
       </section>
@@ -201,8 +244,109 @@
       <!-- Reportes -->
       <section id="reportes" class="section card" style="display:none;padding:20px">
         <h3 style="margin-top:0">Reportes</h3>
-        <p>Exportaciones rápidas (demo).</p>
-        <button class="button" id="exportCsv">Exportar Inventario CSV</button>
+
+        <!-- Filtros de fecha -->
+        <div class="card" style="padding:16px; margin-bottom:16px; display:grid; gap:10px">
+          <div style="display:flex; flex-wrap:wrap; gap:10px; align-items:center">
+            <label>Desde <input type="date" id="repFrom" class="input"></label>
+            <label>Hasta <input type="date" id="repTo" class="input"></label>
+            <div style="margin-left:auto; display:flex; gap:8px; flex-wrap:wrap">
+              <button class="button secondary" id="repPresetToday">Hoy</button>
+              <button class="button secondary" id="repPreset7">Últimos 7 días</button>
+              <button class="button secondary" id="repPreset30">Últimos 30 días</button>
+              <button class="button ghost" id="repPresetAll">Todo</button>
+            </div>
+          </div>
+          <small style="color:#6b7280">Los filtros se aplican a Ventas, Rechazos y Ensambles.</small>
+        </div>
+
+        <!-- Ventas -->
+        <div class="card" style="padding:16px; margin-bottom:16px">
+          <div class="section-head" style="margin-bottom:8px">
+            <h3 style="margin:0">Ventas (resumen)</h3>
+            <div style="display:flex; gap:8px">
+              <button class="button" id="btnRepSales">Generar</button>
+              <button class="button ghost" id="btnRepSalesCsv">Exportar CSV</button>
+            </div>
+          </div>
+          <div id="repSalesSummary" style="display:flex; gap:20px; flex-wrap:wrap; margin-bottom:10px"></div>
+          <div style="height:260px;margin-bottom:10px"><canvas id="repSalesChart"></canvas></div>
+          <table class="table" id="repSalesTable">
+            <thead><tr><th>ID</th><th>Fecha</th><th>Cliente</th><th>Items</th><th>Total</th></tr></thead>
+            <tbody></tbody>
+          </table>
+        </div>
+
+        <!-- Rechazos -->
+        <div class="card" style="padding:16px; margin-bottom:16px">
+          <div class="section-head" style="margin-bottom:8px">
+            <h3 style="margin:0">Rechazos por causa</h3>
+            <div style="display:flex; gap:8px">
+              <button class="button" id="btnRepRejects">Generar</button>
+              <button class="button ghost" id="btnRepRejectsCsv">Exportar CSV</button>
+            </div>
+          </div>
+          <div style="height:260px;margin-bottom:10px"><canvas id="repRejectsChart"></canvas></div>
+          <table class="table" id="repRejectsTable">
+            <thead><tr><th>Causa</th><th>Incidentes</th><th>Cantidad total</th></tr></thead>
+            <tbody></tbody>
+          </table>
+        </div>
+
+        <!-- Ensambles -->
+        <div class="card" style="padding:16px; margin-bottom:16px">
+          <div class="section-head" style="margin-bottom:8px">
+            <h3 style="margin:0">Ensambles por responsable</h3>
+            <div style="display:flex; gap:8px">
+              <button class="button" id="btnRepEnsambles">Generar</button>
+              <button class="button ghost" id="btnRepEnsamblesCsv">Exportar CSV</button>
+            </div>
+          </div>
+          <div style="height:260px;margin-bottom:10px"><canvas id="repEnsamblesChart"></canvas></div>
+          <table class="table" id="repEnsamblesTable">
+            <thead><tr><th>Responsable</th><th># Ensambles</th></tr></thead>
+            <tbody></tbody>
+          </table>
+        </div>
+
+        <!-- Inventario bajo y valoración -->
+        <div class="grid-2">
+          <div class="card" style="padding:16px">
+            <div class="section-head" style="margin-bottom:8px">
+              <h3 style="margin:0">Inventario con poco stock</h3>
+              <div style="display:flex; gap:8px">
+                <button class="button" id="btnRepLowStock">Generar</button>
+                <button class="button ghost" id="btnRepLowStockCsv">Exportar CSV</button>
+              </div>
+            </div>
+            <div style="height:260px;margin-bottom:10px"><canvas id="repLowStockChart"></canvas></div>
+            <table class="table" id="repLowStockTable">
+              <thead><tr><th>ID</th><th>Nombre</th><th>Stock</th><th>Mínimo</th></tr></thead>
+              <tbody></tbody>
+            </table>
+          </div>
+
+          <div class="card" style="padding:16px">
+            <div class="section-head" style="margin-bottom:8px">
+              <h3 style="margin:0">Valoración de inventario</h3>
+              <div style="display:flex; gap:8px">
+                <button class="button" id="btnRepValuation">Generar</button>
+                <button class="button ghost" id="btnRepValuationCsv">Exportar CSV</button>
+              </div>
+            </div>
+            <div id="repValuationSummary" style="margin-bottom:10px;color:#374151"></div>
+            <div style="height:260px;margin-bottom:10px"><canvas id="repValuationChart"></canvas></div>
+            <table class="table" id="repValuationTable">
+              <thead><tr><th>ID</th><th>Nombre</th><th>Precio</th><th>Stock</th><th>Valor</th></tr></thead>
+              <tbody></tbody>
+            </table>
+          </div>
+        </div>
+
+        <div class="card" style="padding:16px; margin-top:16px">
+          <p style="margin:0 0 10px 0">Exportaciones rápidas.</p>
+          <button class="button" id="exportCsv">Exportar Inventario CSV</button>
+        </div>
       </section>
 
       <!-- Configuración -->
