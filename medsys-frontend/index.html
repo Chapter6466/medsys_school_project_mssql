@@ -8,6 +8,7 @@
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;600;700;800&family=Roboto:wght@400;500;700&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="styles.css"/>
+  <!-- Load app.js with defer so it runs after the DOM is parsed -->
   <script defer src="app.js"></script>
   <style>
     /* optional: keep KPI row sticky on scroll */
@@ -244,7 +245,7 @@
     document.querySelectorAll('.kpi.is-action[data-target]').forEach(card=>{
       card.addEventListener('click', ()=>{
         const id = card.getAttribute('data-target');
-        const link = document.querySelector(\`.nav a[data-section="\${id}"]\`);
+        const link = document.querySelector(`.nav a[data-section="${id}"]`);
         if (link) link.click();
       });
     });

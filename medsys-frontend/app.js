@@ -7,17 +7,28 @@
 // ✅ No optional chaining en asignaciones
 // ✅ Logging global de errores
 
+// ---------- Token helper (JWT o base64 plano) ----------
+function parseTokenAny(token) {
+  if (!token) return null;
+  // JWT: header.payload.signature
+  if (token.includes('.')) {
+    try {
+      const base64Url = token.split('.')[1];
+      const base64 = base64Url.replace(/-/g, '+').replace(/_/g, '/');
+      const padded = base64 + '==='.slice((base64.length + 3) % 4);
+      return JSON.parse(atob(padded)); // { user, iat, exp, ... }
+    } catch {}
+  }
+  // Demo legacy: base64 JSON
+  try { return JSON.parse(atob(token)); } catch { return null; }
+}
+
 // ---------- Sesión ----------
 (function(){
   const token = sessionStorage.getItem('medsys_token') || localStorage.getItem('medsys_token');
-  if(!token){ location.href = 'signin.html'; return; }
-  try{
-    const data = JSON.parse(atob(token));
-    const chip = document.getElementById('usernameChip');
-    if (chip) chip.textContent = (data && data.user && data.user.username) ? data.user.username : 'Usuario';
-  }catch(e){
-    sessionStorage.removeItem('medsys_token'); localStorage.removeItem('medsys_token'); location.href = 'signin.html';
-  }
+  const payload = parseTokenAny(token);
+  const chip = document.getElementById('usernameChip');
+  if (chip) chip.textContent = (payload && payload.user && payload.user.username) ? payload.user.username : 'Demo';
 })();
 
 // ---------- Quick styles for UX ----------
@@ -68,7 +79,13 @@ window.addEventListener('unhandledrejection', e => {
 });
 
 async function fetchJson(url, options = {}){
-  const r = await fetch(url, { headers:{'Content-Type':'application/json'}, ...options });
+  const token = sessionStorage.getItem('medsys_token') || localStorage.getItem('medsys_token') || '';
+  const headers = {
+    'Content-Type': 'application/json',
+    ...(options.headers || {}),
+    ...(token ? { Authorization: 'Bearer ' + token } : {})
+  };
+  const r = await fetch(url, { ...options, headers });
   let data = null; try{ data = await r.json(); }catch(e){}
   if(!r.ok){
     const msg = (data && (data.error || data.message)) || ('HTTP '+r.status);
@@ -823,7 +840,7 @@ if (addVentaBtn) addVentaBtn.addEventListener('click', async function(){
   let preIdPersonal = '';
   try{
     const token = sessionStorage.getItem('medsys_token') || localStorage.getItem('medsys_token');
-    const payload = token ? JSON.parse(atob(token)) : null;
+    const payload = parseTokenAny(token);
     if (payload && payload.user && payload.user.idPersonal) preIdPersonal = String(payload.user.idPersonal);
   }catch{}
 
