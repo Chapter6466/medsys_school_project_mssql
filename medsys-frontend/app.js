@@ -42,7 +42,12 @@ document.querySelectorAll('.nav a[data-section]').forEach(link=>{
     document.querySelectorAll('.section').forEach(s=> s.style.display = (s.id===id?'block':'none'));
     document.querySelectorAll('.nav a').forEach(a=> a.classList.toggle('active', a===link));
     if(innerWidth<720 && sidebar) sidebar.classList.remove('open');
-    if (id === 'dashboard') { refreshDashboard().catch(()=>{}); }
+
+    // ✅ KPIs siempre actualizados en cualquier sección
+    refreshKPIs().catch(()=>{});
+
+    // Dashboard sigue refrescando su actividad propia
+    if (id === 'dashboard') { renderActivity().catch(()=>{}); }
   });
 }); // <-- faltaba este cierre
 
@@ -78,6 +83,20 @@ async function fetchJson(url, options = {}){
 // Small helper to safely set textContent
 function setText(id, val){ const el = document.getElementById(id); if(el) el.textContent = String(val); }
 
+function showToast(msg){
+  const t = document.getElementById('toast'); if(!t) return;
+  const m = document.getElementById('toastMsg'); if(m) m.textContent = msg;
+  t.classList.add('show'); setTimeout(()=> t.classList.remove('show'), 2500);
+}
+function fmtDateISO(s){ if(!s) return ''; const d=new Date(s); const y=d.getFullYear(), m=String(d.getMonth()+1).padStart(2,'0'), dd=String(d.getDate()).padStart(2,'0'); return y+'-'+m+'-'+dd; }
+
+// 💲 Formateador de dinero
+function money(v, symbol = '$') {
+  const n = Number(v || 0);
+  const fmt = new Intl.NumberFormat('es-MX', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  return symbol + fmt.format(isFinite(n) ? n : 0);
+}
+
 // Render helpers (tables)
 function setTableLoading(tableEl, text='Cargando…'){
   if(!tableEl) return;
@@ -102,13 +121,6 @@ function renderTable(el, rows, mapRow, opts){
     if (tr) { tr.classList.add('flash'); setTimeout(()=>tr.classList.remove('flash'), 1200); }
   }
 }
-
-function showToast(msg){
-  const t = document.getElementById('toast'); if(!t) return;
-  const m = document.getElementById('toastMsg'); if(m) m.textContent = msg;
-  t.classList.add('show'); setTimeout(()=> t.classList.remove('show'), 2500);
-}
-function fmtDateISO(s){ if(!s) return ''; const d=new Date(s); const y=d.getFullYear(), m=String(d.getMonth()+1).padStart(2,'0'), dd=String(d.getDate()).padStart(2,'0'); return y+'-'+m+'-'+dd; }
 
 /* ---------- Modal helper ----------
    Requires IDs in HTML:
@@ -440,7 +452,7 @@ async function renderOtros(){
       return '<tr data-id="'+r.id+'">'
         +'<td>'+r.id+'</td>'
         +'<td>'+r.Nombre+'</td>'
-        +'<td>$'+Number(r.Costo_Unitario).toFixed(2)+'</td>'
+        +'<td>'+money(r.Costo_Unitario)+'</td>'
         +'<td>'+(r.Uso_Esteril ? 'Sí':'No')+'</td>'
         +'<td><button class="button secondary btn-edit" data-entity="material">Editar</button>'
         +'    <button class="button ghost btn-del" data-entity="material">Eliminar</button></td>'
@@ -481,7 +493,7 @@ async function renderOtros(){
     });
   }catch(e){ console.warn('Rechazos API', e); }
 
-  // Personal (API) — mostrar CORREO (tu HTML tiene la columna "Correo")
+  // Personal (API)
   try{
     const table = document.getElementById('personalTable'); setTableLoading(table);
     const per = await PersonalAPI.list();
@@ -499,7 +511,7 @@ async function renderOtros(){
       setTableLoading(ventasTable);
       const vs = await VentasAPI.list();
       renderTable(ventasTable, vs, function(r){
-        return '<tr data-id="'+r.id+'"><td>'+r.id+'</td><td>'+fmtDateISO(r.Fecha)+'</td><td>'+(r.Cliente||'')+'</td><td>'+Number(r.Total).toFixed(2)+'</td><td>'+(r.Items||0)+'</td>'
+        return '<tr data-id="'+r.id+'"><td>'+r.id+'</td><td>'+fmtDateISO(r.Fecha)+'</td><td>'+(r.Cliente||'')+'</td><td>'+money(r.Total)+'</td><td>'+(r.Items||0)+'</td>'
           +'<td><button class="button ghost btn-del" data-entity="venta">Eliminar</button></td></tr>';
       }, window.__highlight && window.__highlight.venta ? { highlightId: window.__highlight.venta } : undefined);
       if (window.__highlight) delete window.__highlight.venta;
@@ -512,7 +524,7 @@ async function renderProductosFromAPI(){
     const table = document.getElementById('productosTable'); setTableLoading(table);
     const productos = await ProductosAPI.list();
     renderTable(table, productos, function(p){
-      return '<tr data-id="'+p.id+'"><td>'+p.id+'</td><td>'+p.Nombre+'</td><td>'+(p.Clasificacion_Riesgo||'')+'</td><td>$'+Number(p.Precio).toFixed(2)+'</td><td>'+p.Stock_Actual+'</td>'
+      return '<tr data-id="'+p.id+'"><td>'+p.id+'</td><td>'+p.Nombre+'</td><td>'+(p.Clasificacion_Riesgo||'')+'</td><td>'+money(p.Precio)+'</td><td>'+p.Stock_Actual+'</td>'
         +'<td><button class="button secondary btn-edit" data-entity="producto">Editar</button>'
         +'    <button class="button ghost btn-del" data-entity="producto">Eliminar</button></td></tr>';
     });
@@ -520,16 +532,26 @@ async function renderProductosFromAPI(){
 }
 
 // ---------- Dashboard Auto-Refresh ----------
+// Antes: refrescaba TODO el dashboard solo si el dashboard estaba activo.
+// Ahora: KPIs siempre; actividad reciente solo en Dashboard.
 async function refreshDashboard(){
   await Promise.all([refreshKPIs(), renderOtros()]);
 }
 const DASH_INTERVAL_MS = 15000;
 setInterval(function(){
+  // ✅ KPIs en todas las secciones
+  refreshKPIs().catch(()=>{});
+
+  // Actividad reciente solo si estás en Dashboard
   const isDashActive = document.querySelector('.nav a.active[data-section="dashboard"]');
-  if (isDashActive) { refreshDashboard().catch(()=>{}); }
+  if (isDashActive) { renderActivity().catch(()=>{}); }
 }, DASH_INTERVAL_MS);
 document.addEventListener('visibilitychange', function(){
-  if (!document.hidden) { refreshDashboard().catch(()=>{}); }
+  if (!document.hidden) {
+    refreshKPIs().catch(()=>{});
+    const isDashActive = document.querySelector('.nav a.active[data-section="dashboard"]');
+    if (isDashActive) { renderActivity().catch(()=>{}); }
+  }
 });
 
 // ---------- Carga inicial ----------
@@ -597,17 +619,30 @@ if (addMaterialBtn) addMaterialBtn.addEventListener('click', async function(){
 
 // ---- Ensambles (API) ----
 const addEnsambleBtn = document.getElementById('addEnsamble');
-if (addEnsambleBtn) addEnsambleBtn.addEventListener('click', async function(){
+if (addEnsambleBtn) addEnsambleBtn.addEventListener('click', async function () {
   let productos = [];
-  try { productos = await ProductosAPI.list(); } catch(e){ console.error(e); showToast('No se pudo cargar dispositivos'); return; }
-  const options = productos.map(function(p){ return p.id+' - '+p.Nombre; });
+  let materiales = [];
+  try {
+    const rs = await Promise.all([
+      ProductosAPI.list().catch(() => []),
+      MaterialesAPI.list().catch(() => [])
+    ]);
+    productos = rs[0]; materiales = rs[1];
+  } catch (e) {
+    console.error(e); showToast('No se pudo cargar catálogos'); return;
+  }
+
+  const prodOptions = productos.map(p => `${p.id} - ${p.Nombre}`);
+  const detalles = []; // { idMaterial, cantidad }
+
   modal.open({
-    title:'Registrar ensamble',
-    fields:[
-      {name:'ID_DispositivoMed', label:'Dispositivo', type:'select', options, required:true},
-      {name:'Componentes', label:'Componentes', required:false, span2:true},
-      {name:'Fecha', label:'Fecha', type:'date'},
-      {name:'Responsable', label:'Responsable'}
+    title: 'Registrar ensamble',
+    fields: [
+      { name: 'ID_DispositivoMed', label: 'Producto', type: 'select', options: prodOptions, required: true },
+      { name:'Cantidad', label:'Cantidad a fabricar', type:'number', min:1, value:1, required:true },
+      { name: 'Fecha', label: 'Fecha', type: 'date' },
+      { name: 'Responsable', label: 'Responsable' },
+      { name: '__detalles__', label: 'Materiales usados', type: 'textarea', span2: true, disabled: true, value: '' }
     ],
     onSubmit: async function(v){
       const idTxt = String(v.ID_DispositivoMed).split(' - ')[0];
@@ -615,11 +650,79 @@ if (addEnsambleBtn) addEnsambleBtn.addEventListener('click', async function(){
         idDispositivo: Number(idTxt||0),
         componentes: v.Componentes,
         fecha: v.Fecha,
-        responsable: v.Responsable
+        responsable: v.Responsable,
+        cantidad: Number(v.Cantidad || 1)
       });
-      showToast('Ensamble registrado'); await refreshDashboard();
+      showToast('Ensamble registrado');
+      await renderProductosFromAPI();
+      await refreshDashboard();
     }
   });
+
+  setTimeout(() => {
+    const holder = modalFields && modalFields.querySelector('[name="__detalles__"]');
+    if (!holder) return;
+    const wrap = holder.parentElement;
+    wrap.innerHTML = `
+      <label style="display:block;margin-bottom:6px;">Materiales usados</label>
+      <div class="det-row" style="display:flex;gap:8px;align-items:center;margin-bottom:10px;">
+        <select class="det-mat" style="flex:1;min-width:220px;"></select>
+        <input class="det-qty" type="number" min="1" value="1" style="width:110px;" />
+        <button type="button" class="button secondary det-add">+ Agregar</button>
+      </div>
+      <div class="det-list" style="display:flex;flex-direction:column;gap:6px;"></div>
+      <div class="det-empty" style="color:#6b7280;font-size:13px;">Sin materiales aún.</div>
+    `;
+
+    const sel = wrap.querySelector('.det-mat');
+    const qty = wrap.querySelector('.det-qty');
+    const add = wrap.querySelector('.det-add');
+    const list = wrap.querySelector('.det-list');
+    const empty = wrap.querySelector('.det-empty');
+
+    materiales.forEach(m => {
+      const o = document.createElement('option');
+      o.value = String(m.id);
+      o.textContent = `${m.id} - ${m.Nombre}${m.Tipo ? ' (' + m.Tipo + ')' : ''}`;
+      sel.appendChild(o);
+    });
+
+    function renderList () {
+      list.innerHTML = '';
+      if (!detalles.length) { empty.style.display = 'block'; return; }
+      empty.style.display = 'none';
+      detalles.forEach((d, i) => {
+        const mat = materiales.find(x => Number(x.id) === Number(d.idMaterial));
+        const row = document.createElement('div');
+        row.style.display = 'flex';
+        row.style.alignItems = 'center';
+        row.style.gap = '8px';
+        row.innerHTML =
+          `<div style="flex:1;">${mat ? mat.Nombre : ('ID ' + d.idMaterial)} × <strong>${d.cantidad}</strong></div>
+           <button type="button" class="button ghost det-del" data-i="${i}">Quitar</button>`;
+        list.appendChild(row);
+      });
+    }
+
+    add.addEventListener('click', () => {
+      const idMaterial = Number(sel.value || 0);
+      const cantidad = Math.max(1, Number(qty.value || 1));
+      if (!idMaterial) return;
+      detalles.push({ idMaterial, cantidad });
+      renderList();
+      qty.value = '1';
+    });
+
+    list.addEventListener('click', e => {
+      const b = e.target.closest('.det-del');
+      if (!b) return;
+      const i = Number(b.dataset.i);
+      detalles.splice(i, 1);
+      renderList();
+    });
+
+    renderList();
+  }, 0);
 });
 
 // ---- Proveedores (API) ----
@@ -686,7 +789,7 @@ if (addPersonaBtn) addPersonaBtn.addEventListener('click', ()=>{
         rol: v.Rol,
         turno: v.Turno,
         correo: v.Correo,
-        fechaIngreso: v.FechaIngreso,   // 'YYYY-MM-DD'
+        fechaIngreso: v.FechaIngreso,
         telefono: v.Telefono
       });
       showToast('Persona agregada');
@@ -712,13 +815,11 @@ if (addVentaBtn) addVentaBtn.addEventListener('click', async function(){
     personal = [];
   }
 
-  // Opciones para selects
   const productoOptions = productos.map(function(p){ return p.id+' - '+p.Nombre+' (stock: '+p.Stock_Actual+')'; });
   const personalOptions = personal.map(function(per){
     return { value: per.id, label: per.Nombre + (per.Rol ? ' ('+per.Rol+')' : '') };
   });
 
-  // (Opcional) preseleccionar desde el token si lo guardas ahí
   let preIdPersonal = '';
   try{
     const token = sessionStorage.getItem('medsys_token') || localStorage.getItem('medsys_token');
@@ -726,28 +827,40 @@ if (addVentaBtn) addVentaBtn.addEventListener('click', async function(){
     if (payload && payload.user && payload.user.idPersonal) preIdPersonal = String(payload.user.idPersonal);
   }catch{}
 
+  const hoyISO = new Date().toISOString().slice(0,10);
+
   modal.open({
     title:'Registrar venta',
     fields:[
       {name:'Cliente', label:'Cliente', required:true},
-      {name:'Fecha', label:'Fecha', type:'date'},
+      {name:'Fecha', label:'Fecha', type:'date', value: hoyISO},
       {name:'idPersonal', label:'Atendido por', type:'select', options: personalOptions, value: preIdPersonal},
       {name:'ID_DispositivoMed', label:'Producto', type:'select', options: productoOptions, required:true},
       {name:'Cantidad', label:'Cantidad', type:'number', min:1, value:1, required:true},
-      {name:'Precio', label:'Precio unitario', type:'number', step:'0.01'}
+      {name:'Precio', label:'Precio unitario', type:'number', step:'0.01'},
+      {name:'Importe', label:'Total (cant × precio)', type:'number', step:'0.01', disabled:true}
     ],
     onSubmit: async function(v){
       try{
-        const idTxt = String(v.ID_DispositivoMed).split(' - ')[0];
-        const precioUnit = (v.Precio === '' || v.Precio == null) ? undefined : Number(v.Precio);
-        const items = [{
-          idDispositivo: Number(idTxt || 0),
-          cantidad: Number(v.Cantidad || 1),
-          precioUnitario: precioUnit
-        }];
-        const idPersonal = (v.idPersonal === '' || v.idPersonal == null) ? null : Number(v.idPersonal);
+        const idTxt   = String(v.ID_DispositivoMed).split(' - ')[0];
+        const idProd  = Number(idTxt || 0);
+        const qty     = Number(v.Cantidad || 1);
 
-        const resp = await VentasAPI.create({ cliente: v.Cliente, fecha: v.Fecha, idPersonal, items });
+        let price = Number(v.Precio || 0);
+        if (!price || price <= 0) {
+          const prod = productos.find(p => Number(p.id) === idProd);
+          price = Number(prod && prod.Precio != null ? prod.Precio : 0);
+        }
+
+        const idPersonal = (v.idPersonal === '' || v.idPersonal == null) ? null : Number(v.idPersonal);
+        const payload = {
+          cliente: v.Cliente,
+          fecha: v.Fecha || hoyISO,
+          idPersonal,
+          items: [{ idDispositivo: idProd, cantidad: qty, precioUnitario: price }]
+        };
+
+        const resp = await VentasAPI.create(payload);
         showToast('Venta registrada');
         window.__highlight = window.__highlight || {};
         if (resp && resp.id) window.__highlight.venta = Number(resp.id);
@@ -763,7 +876,48 @@ if (addVentaBtn) addVentaBtn.addEventListener('click', async function(){
         }
       }
     }
+  }, {
+    Fecha: hoyISO,
+    Cantidad: 1,
+    Precio: '',
+    Importe: ''
   });
+
+  setTimeout(() => {
+    const form = document.querySelector('.modal form') || document;
+    const sel = form.querySelector('[name="ID_DispositivoMed"]');
+    const qty = form.querySelector('[name="Cantidad"]');
+    const prc = form.querySelector('[name="Precio"]');
+    const tot = form.querySelector('[name="Importe"]');
+
+    function parseId() {
+      const raw = String(sel && sel.value || '');
+      const id = Number(raw.split(' - ')[0] || 0);
+      return Number.isFinite(id) ? id : 0;
+    }
+
+    function setPriceFromProduct() {
+      const id = parseId();
+      const p  = productos.find(x => Number(x.id) === id);
+      if (!p) { if (prc) prc.value = ''; updateTotal(); return; }
+      if (prc) prc.value = String(Number(p.Precio ?? 0).toFixed(2));
+      updateTotal();
+    }
+
+    function updateTotal() {
+      const q = Number(qty && qty.value || 0);
+      const u = Number(prc && prc.value || 0);
+      const total = q * u;
+      if (tot) tot.value = isFinite(total) ? total.toFixed(2) : '';
+    }
+
+    sel && sel.addEventListener('change', setPriceFromProduct);
+    qty && qty.addEventListener('input', updateTotal);
+    prc && prc.addEventListener('input', updateTotal);
+
+    setPriceFromProduct();
+    updateTotal();
+  }, 0);
 });
 
 // ---------- Editar/Eliminar (delegación) ----------
@@ -822,7 +976,6 @@ document.addEventListener('click', async function(e){
         Stock_Minimo: p.Stock_Minimo || 0
       });
     }
-
 
     if(entity==='material'){
       const id = Number(tr.dataset.id);
@@ -947,7 +1100,6 @@ document.addEventListener('click', async function(e){
       });
     }
 
-
     if (entity === 'rechazo') {
       const id = Number(tr.dataset.id);
       let r = {}; let productos = [];
@@ -988,7 +1140,6 @@ document.addEventListener('click', async function(e){
         Fecha: r.Fecha ? fmtDateISO(r.Fecha) : ''
       });
     }
-
 
     if (entity === 'persona') {
       const id = Number(tr.dataset.id);

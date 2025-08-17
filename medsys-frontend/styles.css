@@ -82,8 +82,22 @@ img{max-width:100%;display:block}
   width:36px;height:36px;border-radius:50%;background:linear-gradient(135deg,var(--brand),#1c88d5)
 }
 
-/* ======= Dashboard ======= */
-/* ======= Dashboard KPIs (modern cards) ======= */
+/* ---- Logout (Cerrar sesión) más claro ---- */
+.sidebar .bottom #logout{
+  display:flex;
+  align-items:center;
+  gap:10px;
+  color:#cfe3f7;            /* más claro que #d9e6f2 */
+  text-decoration:none;
+  padding:12px 14px;
+  border-radius:12px;
+  opacity:0.95;
+}
+.sidebar .bottom #logout:hover{
+  color:#ffffff;
+  background:rgba(255,255,255,.06);
+}
+
 /* ======= Dashboard (modern KPI cards) ======= */
 .kpis{
   display:grid;
